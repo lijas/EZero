@@ -1,123 +1,80 @@
 
 abstract type AbstractGame end 
+abstract type AbstractPlayer end
+abstract type AbstractMove end
 
 const PLAYER1 = 1
 const PLAYER2 = 2
 
-mutable struct TicTacToe <: AbstractGame
-    board::Matrix{Int}
-    current_player::Int
+include("TicTacToe.jl")
+include("Connect4.jl")
+include("pit.jl")
+include("EGo.jl")
+
+struct MonteCarloPlayer <: AbstractPlayer 
+    search_time::Float64
+end
+
+struct HumanPlayer <: AbstractPlayer 
     
-    poskey::Int
-    piecekeys::Array{Int,3}
-    sidekey::Int
 end
 
-function TicTacToe()
-    poskey = 0
-    piecekeys = rand(Int,2,3,3)
-    sidekey = rand(Int)
-    poskey ⊻= sidekey
-
-    return TicTacToe(zeros(Int,3,3), PLAYER1,
-            poskey, piecekeys, sidekey)
+function search(player::HumanPlayer, game::AbstractGame)
+    str = readline(stdin)
+    move = parse_human_input(str)
+    return move
 end
 
-struct TicTacToeMove 
-    r::Int
-    c::Int
-end
+function search(player::MonteCarloPlayer, game::AbstractGame)
 
-function generate_moves(game::TicTacToe)
-    moves = TicTacToeMove[]
-    for i in 1:3
-        for j in 1:3
-            if game.board[i,j] == 0
-                push!(moves, TicTacToeMove(i,j))
-            end
-        end
-    end
-    return moves
-end
-
-function make_move(game::TicTacToe, move)
-    game.board[move.r,move.c] = game.current_player
-
-    game.poskey ⊻= game.piecekeys[game.current_player, move.r, move.c]
-    game.poskey ⊻= game.sidekey
-
-    game.current_player =  (game.current_player == PLAYER1) ? PLAYER2 : PLAYER1
-end
-
-function take_move(game::TicTacToe, move)
-    game.board[move.r,move.c] = 0
-
-    game.current_player =  (game.current_player == PLAYER1) ? PLAYER2 : PLAYER1
-
-    game.poskey ⊻= game.piecekeys[game.current_player, move.r, move.c]
-    game.poskey ⊻= game.sidekey
-end
-
-function _is_player_winning(game::TicTacToe, PLAYER::Int)
-    #rows
-    for i in 1:3
-        if all(game.board[1:3,i] .== PLAYER)
-            return true
-        end
-
-        #col
-        if all(game.board[i,1:3] .== PLAYER)
-            return true
-        end
+    visited = Dict{Int, Vector{Float64}}()
+    visited[game.poskey] = [0.0,1.0]
+    for i in 1:50
+        search2(game, visited)
     end
 
-    if all(game.board[[1,5,9]] .== PLAYER)
-        return true
-    end
-
-    if all(game.board[[3,5,6]] .== PLAYER)
-        return true
-    end
-
-    return false
-end
-
-function print_board(game::TicTacToe)
-    @show game.board
-end
-
-function rollout(game::TicTacToe)
-    if is_player1_winning(game)
-        return 1.0
-    elseif is_player2_winning(game)
-        return 0.0
-    else
-        return 0.5
-    end
     moves = generate_moves(game)
-    move = rand(move[1])
-    make_move(game, move)
-    outcome = rollout(game)
-    take_move(game, move)
-    return outcome
+    bestmove = nothing
+    max_visits = -Inf
+    for move in moves
+        make_move(game, move)
+        
+        nwins, nvisits = visited[game.poskey]
+        if(nwins == Inf)
+            bestmove = move
+            take_move(game,move)
+            #println("r: $(move.r), c: $(move.c) with INF")
+            break
+        end
+        if(nvisits > max_visits)
+            max_visits = nvisits
+            bestmove = move
+        end 
+       # println("r: $(move.r), c: $(move.c) with $((nwins, nvisits))")
+        take_move(game,move)
+    end
+    return bestmove
 end
-
-is_player1_winning(game::TicTacToe) = _is_player_winning(game,PLAYER1)
-is_player2_winning(game::TicTacToe) = _is_player_winning(game,PLAYER2)
-is_draw(game::TicTacToe) = all(game.board[:] .!= 0)
 
 function search(game::AbstractGame, visited, Ntot)
 
-
     if is_player1_winning(game)
-        return 1.0
+        if game.current_player == PLAYER1
+            return +1.0
+        else
+            return +1.0
+        end
     elseif is_player2_winning(game)
-        return 0.0
+        if game.current_player == PLAYER2
+            return -1.0
+        else
+            return -1.0
+        end
     elseif is_draw(game)
-        return 0.5
+        return 0.0
     end
 
-    #print_board(game)
+    print_board(game)
 
     #
     moves = generate_moves(game)
@@ -134,13 +91,15 @@ function search(game::AbstractGame, visited, Ntot)
         nsim = 0
         if !haskey(visited, game.poskey)
             outcome = rollout(game)
-            visited[game.poskey] = [outcome,1.0]
+            println("Player $((game.current_player == PLAYER1) ? PLAYER2 : PLAYER1) choosed $move, outcome from rollout: $(-outcome)")
+            visited[game.poskey] = [-outcome,1.0]
             take_move(game, move)
-            return outcome
+            return -outcome
         end
-        wins, nsim = visited[game.poskey]
-        U = wins/nsim + sqrt(2 * log(Ntot)/nsim)
-        #@show wins,nsim, Ntot, U  
+        Q, nsim = visited[game.poskey]
+        #U = wins/nsim + sqrt(2 * log(Ntot)/nsim)
+        U = Q/nsim + (sqrt(2) * sqrt(Ntot)/nsim)
+        println("Move r: $(move.r), c: $(move.c) ->  $Q, $nsim, $Ntot, $U")  
           
         take_move(game, move)
         this_Ntot += nsim
@@ -150,16 +109,124 @@ function search(game::AbstractGame, visited, Ntot)
             bestmove = move
         end
     end
-
+    println("Player $(game.current_player) choose moved r: $(bestmove.r), c: $(bestmove.c)")
     #
 	make_move(game, bestmove)
 	outcome = search(game, visited, this_Ntot)
-	visited[game.poskey] += [outcome, 1]
+	#visited[game.poskey] += [-outcome, 1.0]
+    Q, nsim = visited[game.poskey]
+    visited[game.poskey][1] -= outcome
+    visited[game.poskey][2] += 1
     take_move(game,bestmove)
 
-    visited[game.poskey] += [outcome, 1]
+    #visited[game.poskey] += [outcome, 1.0]
+    #Q, nsim = visited[game.poskey] 
+    #visited[game.poskey][1] = (nsim*Q + -outcome)/nsim
+    #visited[game.poskey][2] += 1
     #
     return outcome
+
+end
+
+function search2(game::AbstractGame, visited)
+    
+    moves_taken = []
+    outcome = 0.0
+    wins, Ntot = visited[game.poskey]
+    while true
+        #print_board(game)
+        moves = generate_moves(game)
+
+        #Should check if this move is terminal maybe
+        if length(moves) == 0
+            #if there are no legal moves,
+            #it is probaebly a draw
+            outcome = 0.0
+            backprop = true
+            break
+        end
+        backprop = false
+        maxU = -Inf
+        Ntot_bestmove = 0.0
+        bestmove = nothing
+        for move in moves
+            make_move(game,move)
+
+            ##########
+            ##########
+            #=
+            if haskey(visited, game.poskey)
+                if _is_player_winning(game, (game.current_player == PLAYER1) ? PLAYER2 : PLAYER1)
+                    println("In this move, Player $((game.current_player == PLAYER1) ? PLAYER2 : PLAYER1) wins  with board $(game.board)")
+                    outcome = -1
+                    backprop = true
+                    visited[game.poskey] = [outcome,1]
+                    take_move(game,move)
+                    break
+
+                elseif is_draw(game)
+                    println("In this move, it is a draw")
+                    outcome = 0.0
+                    backprop = true
+                    visited[game.poskey] = [outcome,1]
+                    take_move(game,move)
+                    break
+                end
+            end
+            =#
+            ##########
+            ##########
+
+            if !haskey(visited, game.poskey)
+                #We hit a leafnode
+                #Perform a rollout and backpropagate the result
+                backprop = true
+                outcome = rollout(game)
+                #println("Found a leafnode with outcome: $outcome")
+                visited[game.poskey] = [outcome,1]
+                if outcome == Inf; outcome = 1;  end
+                take_move(game,move)
+                break
+            end
+            nwins, ntot = visited[game.poskey]
+            if nwins == Inf || nwins == -Inf
+                outcome = 1
+                backprop = true
+                take_move(game, move)
+                break
+            end
+            U = (nwins/ntot) + sqrt(2)*sqrt(log(Ntot)/ntot)
+            #println("Checking move $move:, $nwins, $ntot, $U")
+            if U>maxU
+                maxU = U
+                bestmove = move
+                Ntot_bestmove = ntot
+
+            end
+            take_move(game, move)
+        end
+        
+        if backprop == true
+            break
+        else
+            #println("Player $(game.current_player) choose moved r: $(bestmove.r), c: $(bestmove.c)")
+            Ntot = Ntot_bestmove
+            make_move(game, bestmove)
+            push!(moves_taken, bestmove)
+        end
+    end
+    @show moves_taken
+    #Backprop
+    while length(moves_taken) > 0
+        move = pop!(moves_taken)
+        outcome *= -1
+        println("Backproping move $move")
+        visited[game.poskey] += [outcome,1] 
+        take_move(game, move)
+        #@show game.board
+        
+    end
+    visited[game.poskey] += [outcome,1] 
 
 end
 
@@ -168,23 +235,22 @@ function gogogo()
 
     make_move(game, TicTacToeMove(2,2))
     make_move(game, TicTacToeMove(1,1))
-    make_move(game, TicTacToeMove(2,1))
     make_move(game, TicTacToeMove(1,2))
+    make_move(game, TicTacToeMove(2,1))
+    make_move(game, TicTacToeMove(3,3))
 
     visited = Dict{Int, Vector{Float64}}()
-    visited[game.poskey] = [0.5,1.0]
-    for i in 1:200
-        Ntot = visited[game.poskey][2]
-        search(game, visited, Ntot)
+    visited[game.poskey] = [0.0,1.0]
+    for i in 1:1000
+        search2(game, visited)
     end
 
     moves = generate_moves(game)
+    print_board(game)
     for move in moves
         make_move(game, move)
         println("r: $(move.r), c: $(move.c) with $(visited[game.poskey])")
         take_move(game,move)
     end
-
-
 
 end
