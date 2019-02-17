@@ -7,7 +7,7 @@ function pit(game, player1, player2; should_print = true)
 	winning_player = 0.0
     while true
 		move = search(player1, game)
-		make_move(game, move)
+		make_move!(game, move)
 		
         should_print && print_board(game)
         should_print && println("")
@@ -20,7 +20,7 @@ function pit(game, player1, player2; should_print = true)
         end
 
 		move = search(player2, game)
-		make_move(game, move)
+		make_move!(game, move)
 		
         should_print && print_board(game)
         should_print && println("")

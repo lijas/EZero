@@ -34,7 +34,7 @@ function generate_random_position!(game::Connect4, depth::Int)
     for i in 1:depth
         moves = generate_moves(game)
         random_move = rand(moves)
-        make_move(game,random_move)
+        make_move!(game,random_move)
     end
 
 end
@@ -74,7 +74,7 @@ function generate_moves(game::Connect4)
     return moves
 end
 
-function make_move(game::Connect4, move)
+function make_move!(game::Connect4, move)
     r = game.nmovescol[move.c]+1
     @assert !(r > game.ROWS)
 
@@ -88,7 +88,7 @@ function make_move(game::Connect4, move)
     game.nmovescol[move.c] = r
 end
 
-function take_move(game::Connect4, move)
+function take_move!(game::Connect4, move)
     r = game.nmovescol[move.c]
     game.board[r,move.c] = 0
 
@@ -161,6 +161,10 @@ function print_board(game::Connect4)
     end
 end
 
+function is_move_legal(game::Connect4, move::Connect4Move)
+    return (game.nmovescol[move.c]+1) <= game.ROWS
+end
+
 function rollout(game::Connect4)
     #if _is_player_winning(game, (game.current_player == PLAYER1) ? PLAYER2 : PLAYER1)
     #    println("In rollout, Player1 wins")
@@ -204,7 +208,7 @@ function rollout(game::Connect4)
 
         moves = generate_moves(game)
         move = rand(moves)
-        make_move(game, move)
+        make_move!(game, move)
         push!(moves_taken, move)
     end
     
