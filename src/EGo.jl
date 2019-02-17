@@ -329,13 +329,6 @@ function search(ego::EGo, game::AbstractGame)
 end
 
 function ego_search(game::AbstractGame, nn, visited)::Float64
-    
-    if is_draw(game)
-    	return 0.0
-    elseif _is_player_winning(game,game.current_player == PLAYER1 ? PLAYER2 : PLAYER1)
-        #print_board(game)
-        return 1.0#Inf
-    end
 
     if !haskey(visited, game.poskey)
             boardrep = board_representation(game)
@@ -393,6 +386,20 @@ function ego_search(game::AbstractGame, nn, visited)::Float64
         #take_move!(game,move)
     end
     
+    if is_move_winning(game,best_move)
+        v = 1.0
+        visited[game.poskey][3][i_best] = (N_best*Q_best + v)/(N_best+1)
+        visited[game.poskey][4][i_best] += 1
+        return -v
+    else
+        if is_draw(game)
+           v = 0.0
+           visited[game.poskey][3][i_best] = (N_best*Q_best + v)/(N_best+1)
+           visited[game.poskey][4][i_best] += 1
+           return v
+        end
+    end
+
     make_move!(game, best_move)
     v = ego_search(game, nn, visited)
     take_move!(game, best_move)
@@ -404,7 +411,7 @@ function ego_search(game::AbstractGame, nn, visited)::Float64
     #if v == -Inf
     #    return 1.0
     #else
-        return -v
+    return -v
     #end
 end
 
