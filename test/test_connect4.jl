@@ -4,7 +4,20 @@
 	game = Connect4()
     
     #
-    @test is_move_legal(game, Connect4Move(1)) == true
+    move = Connect4Move(1)
+    @test is_move_legal(game, move) == true
+    make_move!(game, move)
+    @test is_move_legal(game, move) == true
+    make_move!(game, move)
+    @test is_move_legal(game, move) == true
+    make_move!(game, move)
+    @test is_move_legal(game, move) == true
+    make_move!(game, move)
+    @test is_move_legal(game, move) == true
+    make_move!(game, move)
+    @test is_move_legal(game, move) == true
+    make_move!(game, move)
+    @test is_move_legal(game, move) == false #<---FALSE
 
     #check if reset!
     reset!(game)
@@ -27,7 +40,7 @@
     take_move!(game, Connect4Move(1))
     @test game.poskey == first_poskey
 
-    #Is the next move a winning move
+    #Is the next move a winning vertical move
     reset!(game)
     make_move!(game, Connect4Move(1))
     make_move!(game, Connect4Move(2))
@@ -37,4 +50,44 @@
     make_move!(game, Connect4Move(2))
     @test is_move_winning(game, Connect4Move(2)) == false
     @test is_move_winning(game, Connect4Move(1)) == true
+
+    #Is the next move a winning horizontal move
+    reset!(game)
+    make_move!(game, Connect4Move(1))
+    make_move!(game, Connect4Move(1))
+    make_move!(game, Connect4Move(2))
+    make_move!(game, Connect4Move(2))
+    make_move!(game, Connect4Move(3))
+    make_move!(game, Connect4Move(3))
+    @test is_move_winning(game, Connect4Move(7)) == false
+    @test is_move_winning(game, Connect4Move(4)) == true    
+
+    #Is the next move a winning diagonal move
+    reset!(game)
+    make_move!(game, Connect4Move(1))
+    make_move!(game, Connect4Move(2))
+    make_move!(game, Connect4Move(2))
+    make_move!(game, Connect4Move(3))
+    make_move!(game, Connect4Move(3))
+    make_move!(game, Connect4Move(4))
+    make_move!(game, Connect4Move(3))
+    make_move!(game, Connect4Move(4))
+    make_move!(game, Connect4Move(4))
+    make_move!(game, Connect4Move(7))
+    @test is_move_winning(game, Connect4Move(7)) == false
+    @test is_move_winning(game, Connect4Move(4)) == true  
+
+    reset!(game)
+    make_move!(game, Connect4Move(4))
+    make_move!(game, Connect4Move(3))
+    make_move!(game, Connect4Move(3))
+    make_move!(game, Connect4Move(2))
+    make_move!(game, Connect4Move(2))
+    make_move!(game, Connect4Move(1))
+    make_move!(game, Connect4Move(2))
+    make_move!(game, Connect4Move(1))
+    make_move!(game, Connect4Move(1))
+    make_move!(game, Connect4Move(7))
+    @test is_move_winning(game, Connect4Move(7)) == false
+    @test is_move_winning(game, Connect4Move(1)) == true 
 end

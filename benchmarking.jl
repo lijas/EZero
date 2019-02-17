@@ -12,7 +12,7 @@ end
 e0 = EGo()
 reset!(game)
 @btime begin 
-    visited = visited = Dict{Int, Vector{Any}}()
+    visited = Dict{Int, Vector{Any}}()
     ego_search(game, e0.mm, visited)
 end
 

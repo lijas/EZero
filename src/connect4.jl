@@ -215,6 +215,68 @@ function rollout(game::Connect4)
     #return outcome
 end
 
+in_bounds(row::Int, col::Int) = 0<row<(6+1) && 0<col<(7+1)
+function is_move_winning(game::Connect4, move::Connect4Move)
+
+    PLAYER = game.current_player
+    col = move.c
+    row = game.nmovescol[move.c]+1
+    @assert !(row > game.ROWS)
+
+    horizontal_offset = [-3,-2,-1,0,1,2,3]*(6)
+    vertical_offset = [-3,-2,-1,0,1,2,3]
+    rdiag_offset = [-21,-14,-7,0,7,14,21] #/
+    ldiag_offset = [-15,-10,-5,0,5,10,15] #\
+    
+    ii = (game.ROWS*(col-1)) + row
+
+    #Function that ches if 4 pieces are connected
+    _check(board, offset) = begin
+        connected_pieces = 0
+        counter = 1
+        while true
+            #@show counter
+            ind = ii + offset[counter]
+            if 0 <  ind < (game.ROWS*game.COLS)
+                if offset[counter] == 0
+                    connected_pieces += 1
+                else
+                    if board[ind] == PLAYER
+                        connected_pieces +=1
+                    else
+                        connected_pieces = 0
+                    end
+                end
+            end
+
+            if connected_pieces == 4
+                return true
+            end
+
+            if counter == 7
+                break
+            end
+
+            counter +=1
+        end
+        return false
+    end
+
+    if _check(game.board, horizontal_offset) 
+        return true
+    elseif _check(game.board, vertical_offset) 
+        return true
+    elseif _check(game.board, ldiag_offset) 
+        return true
+    elseif _check(game.board, rdiag_offset) 
+        return true
+    else
+        return false
+    end
+
+
+end
+
 is_player1_winning(game::Connect4) = _is_player_winning(game,PLAYER1)
 is_player2_winning(game::Connect4) = _is_player_winning(game,PLAYER2)
 is_draw(game::Connect4) = all(game.board[:] .!= 0)
