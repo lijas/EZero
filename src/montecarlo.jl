@@ -1,7 +1,7 @@
 
 
 struct MonteCarloPlayer <: AbstractPlayer 
-    search_time::Float64
+    nsearches::Int
 end
 
 struct HumanPlayer <: AbstractPlayer 
@@ -18,7 +18,7 @@ function search(player::MonteCarloPlayer, game::AbstractGame)
 
     visited = Dict{Int, Vector{Float64}}()
     visited[game.poskey] = [0.0,1.0]
-    for i in 1:50
+    for i in 1:player.nsearches
         search2(game, visited)
     end
 
