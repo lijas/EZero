@@ -17,8 +17,12 @@ reset!(game)
 end
 
 #Check how long a game between Montecarlo players take
-#They should always be picking the same move...
+#There are some randomness to montecarlo, so probebly
+#not the best way to benchmark
 reset!(game)
-p1 = MonteCarloPlayer(10)
+p1 = MonteCarloPlayer(100)
 p2 = MonteCarloPlayer(10)
-@benchmark pit(game,p1,p2; should_print = false)
+@benchmark begin
+    reset!(game)
+    pit(game,p1,p2; should_print = false)
+end
