@@ -206,7 +206,7 @@ function train_nn!(ego, examples)
         return (v-z)^2 - dot(_pi,log.(P)) + c*dot(ppp,ppp)
     end
 
-    dataset = [(X, Y)]
+    dataset = repeated((X, Y),1)
     evalcb = () -> @show(loss(X, Y))
     opt = ADAM()
 
@@ -330,6 +330,14 @@ end
 
 function ego_search(game::AbstractGame, nn, visited)::Float64
 
+    if was_last_move_a_win(game)
+        return -1.0
+    else
+        if is_draw(game)
+           return 0.0
+        end
+    end
+
     if !haskey(visited, game.poskey)
             boardrep = board_representation(game)
 
@@ -384,20 +392,6 @@ function ego_search(game::AbstractGame, nn, visited)::Float64
             end
         end
         #take_move!(game,move)
-    end
-    
-    if is_move_winning(game,best_move)
-        v = 1.0
-        visited[game.poskey][3][i_best] = (N_best*Q_best + v)/(N_best+1)
-        visited[game.poskey][4][i_best] += 1
-        return -v
-    else
-        if is_draw(game)
-           v = 0.0
-           visited[game.poskey][3][i_best] = (N_best*Q_best + v)/(N_best+1)
-           visited[game.poskey][4][i_best] += 1
-           return v
-        end
     end
 
     make_move!(game, best_move)
