@@ -49,10 +49,10 @@ function generate_moves(game::TicTacToe)
             end
         end
     end
-    return moves
+    return movesf
 end
 
-function make_move(game::TicTacToe, move)
+function make_move!(game::TicTacToe, move)
     game.board[move.r,move.c] = game.current_player
 
     game.poskey ⊻= game.piecekeys[game.current_player, move.r, move.c]
@@ -61,7 +61,7 @@ function make_move(game::TicTacToe, move)
     game.current_player =  (game.current_player == PLAYER1) ? PLAYER2 : PLAYER1
 end
 
-function take_move(game::TicTacToe, move)
+function take_move!(game::TicTacToe, move)
     game.board[move.r,move.c] = 0
 
     game.current_player =  (game.current_player == PLAYER1) ? PLAYER2 : PLAYER1
@@ -134,21 +134,21 @@ function rollout(game::TicTacToe)
                 returnvalue = -1
             end
             while length(moves_taken) > 0
-                take_move(game, pop!(moves_taken))
+                take_move!(game, pop!(moves_taken))
             end
             return returnvalue
 
         elseif is_draw(game)
             println("In rollout, it is a draw")
             while length(moves_taken) > 0
-                take_move(game, pop!(moves_taken))
+                take_move!(game, pop!(moves_taken))
             end
             return 0.0
         end
 
         moves = generate_moves(game)
         move = rand(moves)
-        make_move(game, move)
+        make_move!(game, move)
         push!(moves_taken, move)
     end
     

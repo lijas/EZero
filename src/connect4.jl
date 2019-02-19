@@ -199,14 +199,14 @@ function rollout(game::Connect4)
                 returnvalue = -1
             end
             while length(moves_taken) > 0
-                take_move(game, pop!(moves_taken))
+                take_move!(game, pop!(moves_taken))
             end
             return returnvalue
 
         elseif is_draw(game)
             #println("In rollout, it is a draw")
             while length(moves_taken) > 0
-                take_move(game, pop!(moves_taken))
+                take_move!(game, pop!(moves_taken))
             end
             return 0.0
         end
