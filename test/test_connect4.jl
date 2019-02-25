@@ -48,8 +48,12 @@
     make_move!(game, Connect4Move(2))
     make_move!(game, Connect4Move(1))
     make_move!(game, Connect4Move(2))
-    @test is_move_winning(game, Connect4Move(2)) == false
-    @test is_move_winning(game, Connect4Move(1)) == true
+    #@test is_move_winning(game, Connect4Move(2)) == false
+    #@test is_move_winning(game, Connect4Move(1)) == true
+
+    @test was_last_move_a_win(game) == false
+    make_move!(game,Connect4Move(1))
+    @test was_last_move_a_win(game) == true
 
     #Is the next move a winning horizontal move
     reset!(game)
@@ -59,8 +63,13 @@
     make_move!(game, Connect4Move(2))
     make_move!(game, Connect4Move(3))
     make_move!(game, Connect4Move(3))
-    @test is_move_winning(game, Connect4Move(7)) == false
-    @test is_move_winning(game, Connect4Move(4)) == true    
+    #@test is_move_winning(game, Connect4Move(7)) == false
+    #@test is_move_winning(game, Connect4Move(4)) == true    
+
+
+    @test was_last_move_a_win(game) == false
+    make_move!(game,Connect4Move(4))
+    @test was_last_move_a_win(game) == true
 
     #Is the next move a winning diagonal move
     reset!(game)
@@ -74,8 +83,12 @@
     make_move!(game, Connect4Move(4))
     make_move!(game, Connect4Move(4))
     make_move!(game, Connect4Move(7))
-    @test is_move_winning(game, Connect4Move(7)) == false
-    @test is_move_winning(game, Connect4Move(4)) == true  
+    #@test is_move_winning(game, Connect4Move(7)) == false
+    #@test is_move_winning(game, Connect4Move(4)) == true  
+
+    @test was_last_move_a_win(game) == false
+    make_move!(game,Connect4Move(4))
+    @test was_last_move_a_win(game) == true
 
     reset!(game)
     make_move!(game, Connect4Move(4))
@@ -88,6 +101,33 @@
     make_move!(game, Connect4Move(1))
     make_move!(game, Connect4Move(1))
     make_move!(game, Connect4Move(7))
-    @test is_move_winning(game, Connect4Move(7)) == false
-    @test is_move_winning(game, Connect4Move(1)) == true 
+
+    #@test is_move_winning(game, Connect4Move(7)) == false
+    #@test is_move_winning(game, Connect4Move(1)) == true 
+
+    @test was_last_move_a_win(game) == false
+    make_move!(game,Connect4Move(1))
+    @test was_last_move_a_win(game) == true
+
+    #---
+    reset!(game)
+    make_move!(game, Connect4Move(4))
+    make_move!(game, Connect4Move(4))
+    make_move!(game, Connect4Move(4))
+    make_move!(game, Connect4Move(4))
+    make_move!(game, Connect4Move(1))
+    make_move!(game, Connect4Move(4))
+    make_move!(game, Connect4Move(1))
+    make_move!(game, Connect4Move(4))
+    make_move!(game, Connect4Move(7))
+    print_board(game)
+    #make_move!(game, Connect4Move(7))
+
+    #@test is_move_winning(game, Connect4Move(1)) == false
+    #@test is_move_winning(game, Connect4Move(5)) == true 
+
+    @test was_last_move_a_win(game) == false
+    make_move!(game,Connect4Move(5))
+    @test was_last_move_a_win(game) == false
+
 end
