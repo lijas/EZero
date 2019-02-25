@@ -1,7 +1,7 @@
 
 @testset "EZero search" begin
 	
-	e0 = EGo()
+	e0 = EZero()
 	#Create a position where player is one move
 	#from winning. See if E0 finds that move
 	game = Connect4()
@@ -22,7 +22,7 @@
     #Make a neural network which values all positions equally
     #Otherwise it does not really work....
     fake_neural_network(x) = vcat(ones(7)*1/7, 0.0)
-    e0 = EGo(fake_neural_network,fake_neural_network)
+    e0 = EZero(fake_neural_network,fake_neural_network)
 
     game = Connect4()
     make_move!(game, Connect4Move(3))

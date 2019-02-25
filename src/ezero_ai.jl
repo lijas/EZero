@@ -7,7 +7,7 @@ import Random: shuffle!
 using BSON
 using Dates: now, format
 
-mutable struct EGo{M,M2} <: AbstractPlayer 
+mutable struct EZero{M,M2} <: AbstractPlayer 
     nn::M
     mm::M2
 end
@@ -200,7 +200,7 @@ function train_nn!(ego, examples)
 
 end
 
-function EGo()
+function EZero()
 
     mask1 = [0., 0., 0., 0., 0., 0., 0., -1.0e10]
     mask2 = [false,false,false,false,false,false,false,true]
@@ -228,12 +228,12 @@ function EGo()
 
     model2 = Flux.mapleaves(Flux.data, model)
 
-    return EGo(model,model2)
+    return EZero(model,model2)
 end
 
-function EGo(model::T) where T
+function EZero(model::T) where T
     model2 = Flux.mapleaves(Flux.data, model)
-    return EGo(model,model2)
+    return EZero(model,model2)
 end
 
 function train_ego()
@@ -246,7 +246,7 @@ function index_2_move(game::Connect4, i::Int)
 end
 
 
-function search(ego::EGo, game::AbstractGame)
+function search(ego::EZero, game::AbstractGame)
     
     visited = Dict{Int, Vector{Any}}()
     for i in 1:100
