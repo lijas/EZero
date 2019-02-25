@@ -3,8 +3,9 @@ using Flux, Flux.Data.MNIST, Statistics
 using Flux: onehotbatch, onecold, crossentropy, throttle
 using Base.Iterators: repeated
 using LinearAlgebra: dot
-#using BSON: @save
-import Dates: now
+import Random: shuffle!
+using BSON
+using Dates: now, format
 
 mutable struct EGo{M,M2} <: AbstractPlayer 
     nn::M
@@ -21,9 +22,9 @@ end
 
 function policy_iter(ego, game)
 
-    num_iters = 10
+    num_iters = 1000
     num_eps = 100
-    threshold = 0.55
+    threshold = 0.53
     
     game = Connect4()            
 
@@ -35,8 +36,10 @@ function policy_iter(ego, game)
             append!(examples, e)
             reset!(game)
         end 
+
         #Symmetrize input if possible (In Connect4 it is possible)
         symmetry_examples = symmetrize_example.(examples)
+
         append!(examples, symmetry_examples)
 
         println("Number of training examples: $(length(examples))")
@@ -47,13 +50,13 @@ function policy_iter(ego, game)
 
         println("Fraction of wins: $(frac_win)")
 
-        if !(frac_win > threshold)
-            ego = old_ego #reset to old nn since in was bad  
-
-            #savefile = "saved_models/mode_"*Dates.now()
-            #@show savefile
-            #@show nn = ego.nn
-            #@save savefile nn
+        if frac_win > threshold
+            savefile = "src/saved_models/model_" * format(now(), "yyyy_mm_dd_HH_MM_SS") * ".bson"
+            println("Saving current nn to $savefile")
+            nn = ego.nn
+            BSON.@save savefile nn
+        else
+            ego = old_ego
         end
     end                             # replace with new net            
 end
@@ -100,11 +103,13 @@ end
 
 function symmetrize_example(ex::TrainingExample)
     symmetry_input = reverse(reshape(ex.input,6,7), dims = 2)[:]
-    newex = TrainingExample(symmetry_input, ex.pi, ex.P ,ex.v ,ex.outcome)
+    symmetry_pi = reverse(ex.pi)
+    symmetry_P = reverse(ex.P)
+    newex = TrainingExample(symmetry_input, symmetry_P, symmetry_pi, ex.v ,ex.outcome)
     return newex
 end
 
-function pit_ego(new_ego::T, old_ego::T, game) where T
+function pit_ego(new_ego, old_ego, game)
     npitgames = 100
     nwins = 0
 
@@ -137,9 +142,10 @@ function execute_episode(ego, game)
 
     examples = TrainingExample[]
     n_mcts_sim = 100
-    visited = Dict{Int, Vector{Any}}()
+    
     while true
 
+        visited = Dict{Int, Vector{Any}}()
         for i in 1:n_mcts_sim
             ego_search(game, ego.mm, visited)
         end
@@ -195,7 +201,7 @@ function train_nn!(ego, examples)
         Y[:,i] = vcat(examples[i].pi, Float64(examples[i].outcome))
     end
 
-    c = 1
+    c = 0.1
     loss = function ffff(x,y)
         P_and_v = ego.nn(x)
         P = P_and_v[1:7]
@@ -217,7 +223,7 @@ end
 function train_nn2!()
     X = rand(6*7)
     Y = ones(8)*(1/7)
-    
+    @show now()
     mask1 = [0., 0., 0., 0., 0., 0., 0., -1.0e10]
     mask2 = [false,false,false,false,false,false,false,true]
 
@@ -230,28 +236,27 @@ function train_nn2!()
         mysoftmax)
     =#
     m = Chain(
-        # First convolution, operating upon a 28x28 image
-        Conv((3, 3), 1=>16, pad=(1,1), relu),
+        Conv((2, 2), 1=>10, pad=(1,1), relu),
         x -> maxpool(x, (2,2)),
 
-        # Second convolution, operating upon a 14x14 image
-        Conv((3, 3), 16=>32, pad=(1,1), relu),
+        Conv((2, 2), 10=>10, pad=(1,1), relu),
         x -> maxpool(x, (2,2)),
 
-        # Third convolution, operating upon a 7x7 image
-        Conv((3, 3), 32=>32, pad=(1,1), relu),
+        Conv((2, 2), 10=>10, pad=(1,1), relu),
         x -> maxpool(x, (2,2)),
 
+        Conv((2, 2), 10=>10, pad=(1,1), relu),
+        x -> maxpool(x, (2,2)),
         # Reshape 3d tensor into a 2d one, at this point it should be (3, 3, 32, N)
         # which is where we get the 288 in the `Dense` layer below:
         x -> reshape(x, :, size(x, 4)),
-        Dense(288, 8),
+        Dense(40, 8),
         mysoftmax)
       #softmax)
       #x -> [softmax(x[1:7]); x[8]])
     m2 = Flux.mapleaves(Flux.data, m)
 
-    @show m2(rand(28,28,1))
+    @show m2(rand(28,28,1,1))
     error("hej")
     loss(x, y) = crossentropy(m(x), y)
 
@@ -278,18 +283,31 @@ function EGo()
     =#
 
     model = Chain(
-        # First convolution, operating upon a 28x28 image
-        Conv((3, 3), 1=>10, pad=(1,1), relu),
+        Conv((2, 2), 1=>10, pad=(1,1), relu),
+        x -> maxpool(x, (2,2)),
+
+        Conv((2, 2), 10=>10, pad=(1,1), relu),
+        x -> maxpool(x, (2,2)),
+
+        Conv((2, 2), 10=>10, pad=(1,1), relu),
+        x -> maxpool(x, (2,2)),
+
+        Conv((2, 2), 10=>10, pad=(1,1), relu),
         x -> maxpool(x, (2,2)),
         # Reshape 3d tensor into a 2d one, at this point it should be (3, 3, 32, N)
         # which is where we get the 288 in the `Dense` layer below:
         x -> reshape(x, :, size(x, 4)),
-        Dense(90, 8),
+        Dense(10, 8),
         mysoftmax)
         #(x) -> [softmax(x[1:7]); x[8]])
 
     model2 = Flux.mapleaves(Flux.data, model)
 
+    return EGo(model,model2)
+end
+
+function EGo(model::T) where T
+    model2 = Flux.mapleaves(Flux.data, model)
     return EGo(model,model2)
 end
 
@@ -314,7 +332,8 @@ function search(ego::EGo, game::AbstractGame)
     end
 
     #
-    P, v,Q, N = visited[game.poskey]
+    P, v, Q, N = visited[game.poskey]
+
     N2 = copy(N)
     best_i = findmax(N2)[2]
     move = index_2_move(game,best_i)
@@ -330,8 +349,10 @@ end
 
 function ego_search(game::AbstractGame, nn, visited)::Float64
 
+    #print_board(game)
+
     if was_last_move_a_win(game)
-        return -1.0
+        return 1.0
     else
         if is_draw(game)
            return 0.0
@@ -339,18 +360,18 @@ function ego_search(game::AbstractGame, nn, visited)::Float64
     end
 
     if !haskey(visited, game.poskey)
+            #println("Have not visited this pos")
             boardrep = board_representation(game)
-
             P_and_v = nn(reshape(boardrep,(6,7,1,1)))
             #mapleaves(Flux.data, ego.mm(board_representation(game)))
             #P_and_v = Float64[]
             #append!(P_and_v, ones(Float64, 7) * 1/7)
             #push!(P_and_v, Float64(0.0))
-
             P = P_and_v[1:7] #hardcode connect4
             v = P_and_v[end]
             Q = zeros(Float64,7)
             N = zeros(Int,7)
+            #println("P: $P, v: $v")
 
             aa = []
             push!(aa, P)
@@ -368,6 +389,7 @@ function ego_search(game::AbstractGame, nn, visited)::Float64
     Q_best, N_best::Float64, i_best = 0.0, 0.0, 0
     P, v::Float64, Q::Vector{Float64}, N::Vector{Int} = visited[game.poskey]
     local u::Float64
+    #shuffle!(moves)
     for move in moves
         
         i  = move.c #Hardcode connect4
@@ -380,8 +402,8 @@ function ego_search(game::AbstractGame, nn, visited)::Float64
         #else
             u = Q[i] + sqrt(2)*P[i]*sqrt(sum(N))/(1+N[i]) 
         #end
-        
-        if u>=max_u
+        #@show i,u
+        if u>max_u
             max_u = u
             best_move = move
             N_best = Float64(N[i])
@@ -394,6 +416,8 @@ function ego_search(game::AbstractGame, nn, visited)::Float64
         #take_move!(game,move)
     end
 
+    #println("Best move: $i_best")
+
     make_move!(game, best_move)
     v = ego_search(game, nn, visited)
     take_move!(game, best_move)
@@ -401,7 +425,6 @@ function ego_search(game::AbstractGame, nn, visited)::Float64
     #@show N_best,Q_best
     visited[game.poskey][3][i_best] = (N_best*Q_best + v)/(N_best+1)
     visited[game.poskey][4][i_best] += 1
-
     #if v == -Inf
     #    return 1.0
     #else
