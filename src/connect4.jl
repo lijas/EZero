@@ -14,7 +14,9 @@ mutable struct Connect4 <: AbstractGame
     piecekeys::Array{Int,3}
     sidekey::Int
 
+    #Maybe have a movehistory vector instead
     lastmove::Connect4Move
+    tempmove::Connect4Move
 end
 
 function Connect4()
@@ -27,7 +29,7 @@ function Connect4()
 
     return Connect4(rows, cols, zeros(Int,rows,cols), PLAYER1, zeros(Int,cols),
             poskey, piecekeys, sidekey,
-            Connect4Move(-1) )
+            Connect4Move(-1), Connect4Move(-1))
 end
 
 
@@ -50,6 +52,7 @@ function reset!(game::Connect4)
     game.poskey = 0
     game.poskey ⊻= game.sidekey
     game.lastmove = Connect4Move(-1)
+    game.tempmove = Connect4Move(-1)
 end
 
 function parse_human_input(str::String)
@@ -91,6 +94,8 @@ function make_move!(game::Connect4, move)
     game.current_player =  (game.current_player == PLAYER1) ? PLAYER2 : PLAYER1
 
     game.nmovescol[move.c] = r
+    game.tempmove = game.lastmove
+    game.lastmove = move
 end
 
 function take_move!(game::Connect4, move)
@@ -103,6 +108,8 @@ function take_move!(game::Connect4, move)
     game.poskey ⊻= game.sidekey
 
     game.nmovescol[move.c] -= 1
+    game.lastmove = game.tempmove
+    game.tempmove = Connect4Move(-1)
 end
 
 function _is_player_winning(game::Connect4, PLAYER::Int)
@@ -285,7 +292,6 @@ end
 function was_last_move_a_win(game::Connect4)
 
 
-
     PLAYER = game.current_player == PLAYER1 ? PLAYER2 : PLAYER1
     col = game.lastmove.c
     if col == -1
@@ -293,28 +299,33 @@ function was_last_move_a_win(game::Connect4)
     end
     row = game.nmovescol[col]
 
-    horizontal_offset = [-3,-2,-1,0,1,2,3]*(6)
-    vertical_offset = [-3,-2,-1,0,1,2,3]
-    rdiag_offset = [-21,-14,-7,0,7,14,21] #/
-    ldiag_offset = [-15,-10,-5,0,5,10,15] #\
+    horizontal_offset = [(0,-3),(0,-2),(0,-1),(0,0),(0,1),(0,2),(0,3)]
+    #horizontal_offset = [-3,-2,-1,0,1,2,3]*(6)
+    vertical_offset = [(-3,0),(-2,0),(-1,0),(0,0),(1,0),(2,0),(3,0)]
+    #vertical_offset = [-3,-2,-1,0,1,2,3]
+    rdiag_offset = [(-3,-3),(-2,-2),(-1,-1),(0,0),(1,1),(2,2),(3,3)]
+    #rdiag_offset = [-21,-14,-7,0,7,14,21] #/
+    ldiag_offset = [(-3,3),(-2,2),(-1,1),(0,0),(1,-1),(2,-2),(3,-3)]
+    #ldiag_offset = [-15,-10,-5,0,5,10,15] #\
     
-    ii = (game.ROWS*(col-1)) + row
+    #ii = (game.ROWS*(col-1)) + row
+    ir = row
+    ic = col
 
-    #Function that ches if 4 pieces are connected
+    #Function that checks if 4 pieces are connected
     _check(board, offset) = begin
         connected_pieces = 0
         counter = 1
         while true
             #@show counter
-            ind = ii + offset[counter]
-            if 0 <  ind < (game.ROWS*game.COLS)
-   
-                if board[ind] == PLAYER
-                    connected_pieces +=1
+            rr = ir + offset[counter][1]
+            cc = ic + offset[counter][2]
+            if (0 < cc <= game.COLS) && (0 < rr <= game.ROWS)
+                if board[rr,cc] == PLAYER
+                    connected_pieces += 1
                 else
                     connected_pieces = 0
                 end
-
             end
 
             if connected_pieces == 4
