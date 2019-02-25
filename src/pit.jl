@@ -2,6 +2,8 @@
 
 function pit(game, player1, player2; should_print = true)
 
+    @assert was_last_move_a_win(game) == false
+
     first_player_to_move = game.current_player
     second_player_to_move = game.current_player == PLAYER1 ? PLAYER2 : PLAYER1
 	winning_player = 0.0
@@ -12,7 +14,7 @@ function pit(game, player1, player2; should_print = true)
         should_print && print_board(game)
         should_print && println("")
 
-        if _is_player_winning(game, first_player_to_move)
+        if was_last_move_a_win(game)
             winning_player = first_player_to_move
             break
         elseif is_draw(game)
@@ -25,7 +27,7 @@ function pit(game, player1, player2; should_print = true)
         should_print && print_board(game)
         should_print && println("")
 
-        if _is_player_winning(game, second_player_to_move)
+        if was_last_move_a_win(game)
             winning_player = second_player_to_move
             break
         elseif is_draw(game)
