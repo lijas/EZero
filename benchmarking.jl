@@ -17,7 +17,7 @@ reset!(game)
 end
 
 #Check how long a game between Montecarlo players take
-#There are some randomness to montecarlo, so probebly
+#There are some randomness to montecarlo, so probobly
 #not the best way to benchmark
 reset!(game)
 p1 = MonteCarloPlayer(100)
