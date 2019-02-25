@@ -106,16 +106,7 @@ function print_board(game::TicTacToe)
 end
 
 function rollout(game::TicTacToe)
-    #if _is_player_winning(game, (game.current_player == PLAYER1) ? PLAYER2 : PLAYER1)
-    #    println("In rollout, Player1 wins")
-    #    return -1
-    #elseif is_player2_winning(game)
-    #    println("In rollout, Player2 wins")
-    #    return 1
-    #elseif is_draw(game)
-    #    println("In rollout, draw")
-    #    return 0.0
-    #end
+
     first_player = game.current_player
     moves_taken = []
     println("Rollout from $(game.board) and curent player is Player $(game.current_player)")
