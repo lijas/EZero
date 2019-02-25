@@ -61,26 +61,6 @@ function policy_iter(ego, game)
     end                             # replace with new net            
 end
 
-#=function board_representation(game::Connect4)
-    board_rep = zeros(Float64, game.ROWS,game.COLS,1,1)
-
-    counter = 1
-    for j in 1:game.COLS#game.ROWS
-        for i in 1:game.ROWS#game.COLS
-            if 0 == game.board[i,j]
-                board_rep[i,j,1,1] = 0.0
-            elseif game.board[i,j,1] == game.current_player
-                board_rep[i,j,1,1] = 1.0
-            else
-                board_rep[i,j,1,1] = -1.0
-            end
-            counter +=1 
-        end
-    end
-    return board_rep
-    #return [game.board[:]; game.current_player]
-end=#
-
 function board_representation(game::Connect4)
     board_rep = zeros(Float64, game.ROWS*game.COLS)
 
@@ -201,7 +181,7 @@ function train_nn!(ego, examples)
         Y[:,i] = vcat(examples[i].pi, Float64(examples[i].outcome))
     end
 
-    c = 0.1
+    c = 0.1 # what value to use for this
     loss = function ffff(x,y)
         P_and_v = ego.nn(x)
         P = P_and_v[1:7]
@@ -220,67 +200,12 @@ function train_nn!(ego, examples)
 
 end
 
-function train_nn2!()
-    X = rand(6*7)
-    Y = ones(8)*(1/7)
-    @show now()
-    mask1 = [0., 0., 0., 0., 0., 0., 0., -1.0e10]
-    mask2 = [false,false,false,false,false,false,false,true]
-
-    mysoftmax = (x) -> softmax(x.+mask1) + mask2 .* x
-
-    #=
-    model = Chain(
-        Dense(6*7, 10),
-        Dense(10, 7+1),
-        mysoftmax)
-    =#
-    m = Chain(
-        Conv((2, 2), 1=>10, pad=(1,1), relu),
-        x -> maxpool(x, (2,2)),
-
-        Conv((2, 2), 10=>10, pad=(1,1), relu),
-        x -> maxpool(x, (2,2)),
-
-        Conv((2, 2), 10=>10, pad=(1,1), relu),
-        x -> maxpool(x, (2,2)),
-
-        Conv((2, 2), 10=>10, pad=(1,1), relu),
-        x -> maxpool(x, (2,2)),
-        # Reshape 3d tensor into a 2d one, at this point it should be (3, 3, 32, N)
-        # which is where we get the 288 in the `Dense` layer below:
-        x -> reshape(x, :, size(x, 4)),
-        Dense(40, 8),
-        mysoftmax)
-      #softmax)
-      #x -> [softmax(x[1:7]); x[8]])
-    m2 = Flux.mapleaves(Flux.data, m)
-
-    @show m2(rand(28,28,1,1))
-    error("hej")
-    loss(x, y) = crossentropy(m(x), y)
-
-    dataset = [(X,Y)]
-    evalcb = () -> @show(loss(X, Y))
-    opt = ADAM()
-
-    Flux.train!(loss, params(m), dataset, opt, cb = throttle(evalcb, 10))
-    @show m2(X)
-end
-
 function EGo()
 
     mask1 = [0., 0., 0., 0., 0., 0., 0., -1.0e10]
     mask2 = [false,false,false,false,false,false,false,true]
 
     mysoftmax = (x) -> softmax(x.+mask1) + mask2 .* x
-
-    #=
-    model = Chain(
-        Dense(6*7, 10),
-        Dense(10, 7+1),
-        mysoftmax)
-    =#
 
     model = Chain(
         Conv((2, 2), 1=>10, pad=(1,1), relu),
@@ -324,10 +249,7 @@ end
 function search(ego::EGo, game::AbstractGame)
     
     visited = Dict{Int, Vector{Any}}()
-    #visited[game.poskey] = [0.0,0.0,0.0,1]
-
     for i in 1:100
-        #Ntot = visited[game.poskey][4]
         ego_search(game, ego.mm, visited)
     end
 
@@ -349,8 +271,6 @@ end
 
 function ego_search(game::AbstractGame, nn, visited)::Float64
 
-    #print_board(game)
-
     if was_last_move_a_win(game)
         return 1.0
     else
@@ -360,18 +280,14 @@ function ego_search(game::AbstractGame, nn, visited)::Float64
     end
 
     if !haskey(visited, game.poskey)
-            #println("Have not visited this pos")
+
             boardrep = board_representation(game)
             P_and_v = nn(reshape(boardrep,(6,7,1,1)))
-            #mapleaves(Flux.data, ego.mm(board_representation(game)))
-            #P_and_v = Float64[]
-            #append!(P_and_v, ones(Float64, 7) * 1/7)
-            #push!(P_and_v, Float64(0.0))
+
             P = P_and_v[1:7] #hardcode connect4
             v = P_and_v[end]
             Q = zeros(Float64,7)
             N = zeros(Int,7)
-            #println("P: $P, v: $v")
 
             aa = []
             push!(aa, P)
@@ -392,85 +308,25 @@ function ego_search(game::AbstractGame, nn, visited)::Float64
     #shuffle!(moves)
     for move in moves
         
-        i  = move.c #Hardcode connect4
+        i  = move.c #Hardcode connect4, must be changed for other games
 
-        #If Q[i] == inf, this move is a win
-        #if Q[i] == Inf
-        #    u = max_u+1.0
-        #elseif Q[i] == -Inf
-        #    u = -Inf
-        #else
-            u = Q[i] + sqrt(2)*P[i]*sqrt(sum(N))/(1+N[i]) 
-        #end
-        #@show i,u
+        u = Q[i] + sqrt(2)*P[i]*sqrt(sum(N))/(1+N[i]) 
+ 
         if u>max_u
             max_u = u
             best_move = move
             N_best = Float64(N[i])
             Q_best = Q[i]
             i_best = i
-            if Q[i] == Inf
-                break
-            end
         end
-        #take_move!(game,move)
     end
-
-    #println("Best move: $i_best")
 
     make_move!(game, best_move)
     v = ego_search(game, nn, visited)
     take_move!(game, best_move)
 
-    #@show N_best,Q_best
     visited[game.poskey][3][i_best] = (N_best*Q_best + v)/(N_best+1)
     visited[game.poskey][4][i_best] += 1
-    #if v == -Inf
-    #    return 1.0
-    #else
-    return -v
-    #end
-end
-
-
-using InteractiveUtils
-function egogo2()
-
-    game = Connect4()
-    ego = EGo()
-
-    visited = Dict{Int, Vector{Any}}()
     
-    ego_search(game, ego.mm,visited)
-
-    ego_search(game, ego.mm,visited)
-end
-
-function egogo()
-    game = Connect4()
-    ego = EGo()
-
-    make_move!(game, Connect4Move(4))
-    make_move!(game, Connect4Move(4))
-    make_move!(game, Connect4Move(5))
-    #make_move!(game, Connect4Move(5))
-
-    print_board(game)
-    visited = Dict{Int, Vector{Any}}()
-    #visited[game.poskey] = [0.0,0.0,0.0,1]
-    for i in 1:1000
-        #
-        ego_search(game, ego.mm, visited)
-        #Ntot = visited[game.poskey][4]
-    end
-
-    println("--EVAL--")
-    best_p = -Inf
-    best_move = nothing
-    #for (i, move) in enumerate(moves)
-        #i  = move.c #Hardcode connect4
-        P, v, Q, N = visited[game.poskey]
-        println("N: $N, P: $P")
-    #end
-
+    return -v
 end
