@@ -1,7 +1,7 @@
 
 @testset "EZero search" begin
-	
-	e0 = EZero()
+	fake_neural_network(x) = vcat(ones(7)*1/7, 0.0)
+	e0 = EZero(fake_neural_network,fake_neural_network)
 	#Create a position where player is one move
 	#from winning. See if E0 finds that move
 	game = Connect4()
@@ -12,7 +12,7 @@
 	make_move!(game, Connect4Move(4))
 	make_move!(game, Connect4Move(5))
 
-	visited = Dict{Int, Vector{Any}}()
+	visited = Dict{Int, MCTSVectors}()
 	bestmove = search(e0, game)
 	@test bestmove == Connect4Move(4)
 
@@ -21,7 +21,6 @@
 
     #Make a neural network which values all positions equally
     #Otherwise it does not really work....
-    fake_neural_network(x) = vcat(ones(7)*1/7, 0.0)
     e0 = EZero(fake_neural_network,fake_neural_network)
 
     game = Connect4()
@@ -30,8 +29,9 @@
     make_move!(game, Connect4Move(5))
     make_move!(game, Connect4Move(5))
     
-    visited = Dict{Int, Vector{Any}}()
+    visited = Dict{Int, MCTSVectors}()
     bestmove = search(e0, game)
+    print_board(game)
     @test bestmove == Connect4Move(4)
 
 

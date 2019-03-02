@@ -125,7 +125,7 @@ function execute_episode(ego, game)
     
     while true
 
-        visited = Dict{Int, Vector{Any}}()
+        visited = Dict{Int, MCTSVectors}()
         for i in 1:n_mcts_sim
             ego_search(game, ego.mm, visited)
         end
@@ -217,14 +217,18 @@ end
 
 function search(ego::EZero, game::AbstractGame)
     
-    visited = Dict{Int, Vector{Any}}()
+    visited = Dict{Int, MCTSVectors}()
     for i in 1:100
         ego_search(game, ego.mm, visited)
     end
 
     #
-    P, v, Q, N = visited[game.poskey]
-
+    mcts_vectors = visited[game.poskey]
+    P = mcts_vectors.P
+    v = mcts_vectors.v
+    Q = mcts_vectors.Q 
+    N = mcts_vectors.N
+    
     N2 = copy(N)
     best_i = findmax(N2)[2]
     move = index_2_move(game,best_i)
@@ -236,6 +240,13 @@ function search(ego::EZero, game::AbstractGame)
 
     return move
 
+end
+
+struct MCTSVectors
+    P::Vector{Float64}
+    v::Float64
+    Q::Vector{Float64}
+    N::Vector{Int}
 end
 
 function ego_search(game::AbstractGame, nn, visited)::Float64
@@ -258,31 +269,31 @@ function ego_search(game::AbstractGame, nn, visited)::Float64
             Q = zeros(Float64,7)
             N = zeros(Int,7)
 
-            aa = []
-            push!(aa, P)
-            push!(aa, v)
-            push!(aa, Q)
-            push!(aa, N)
-            visited[game.poskey] = aa
+            visited[game.poskey] = MCTSVectors(P,v,Q,N)
         
         return -v
     end
   
   	moves = generate_moves(game)
-    max_u::Float64 = -Inf
-    local best_move::getmovetype(game)
-    Q_best, N_best::Float64, i_best = 0.0, 0.0, 0
-    P, v::Float64, Q::Vector{Float64}, N::Vector{Int} = visited[game.poskey]
+    
+    mcts_vectors  = visited[game.poskey]
+    P = mcts_vectors.P
+    v = mcts_vectors.v
+    Q = mcts_vectors.Q 
+    N = mcts_vectors.N
+
     local u::Float64
-    #shuffle!(moves)
+    local best_move::getmovetype(game)
+    u_best, Q_best, N_best::Float64, i_best = -Inf, 0.0, 0.0, 0
+
     for move in moves
         
         i  = move.c #Hardcode connect4, must be changed for other games
 
         u = Q[i] + sqrt(2)*P[i]*sqrt(sum(N))/(1+N[i]) 
  
-        if u>max_u
-            max_u = u
+        if u>u_best
+            u_best = u
             best_move = move
             N_best = Float64(N[i])
             Q_best = Q[i]
@@ -294,8 +305,8 @@ function ego_search(game::AbstractGame, nn, visited)::Float64
     v = ego_search(game, nn, visited)
     take_move!(game, best_move)
 
-    visited[game.poskey][3][i_best] = (N_best*Q_best + v)/(N_best+1)
-    visited[game.poskey][4][i_best] += 1
+    visited[game.poskey].Q[i_best] = (N_best*Q_best + v)/(N_best+1)
+    visited[game.poskey].N[i_best] += 1
     
     return -v
 end
