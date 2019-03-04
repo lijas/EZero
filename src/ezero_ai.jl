@@ -7,10 +7,21 @@ import Random: shuffle!
 using BSON
 using Dates: now, format
 using StatsBase: Weights, sample
+using Distributions: Dirichlet
 
 mutable struct EZero{M,M2} <: AbstractPlayer 
     nn::M
     mm::M2
+end
+
+struct E0Config
+    α::Float64
+    ϵ::Float64
+    dirichlet::Dirichlet{Float64}
+end
+
+function E0Config(;α = 0.8, ϵ = 0.25, n = 7)
+    return E0Config(α,ϵ, Dirichlet(ones(n)*α))
 end
 
 mutable struct TrainingExample
@@ -21,11 +32,27 @@ mutable struct TrainingExample
     outcome::Int
 end
 
-function policy_iter(ego, game)
+struct TrainingConfig
+    num_iters::Int
+    num_eps::Int
+    threshold::Float64
+    num_mcts_sim::Int
+    npitgames::Int
+    λ::Float64
+    e0config::E0Config
+end
 
-    num_iters = 10000
-    num_eps = 400
-    threshold = 0.53
+function TrainingConfig(;num_iters=1000, num_eps=400, threshold=0.53, 
+    num_mcts_sim=300, npitgames=100, λ=0.01,
+    e0config = E0Config() )
+    return TrainingConfig(num_iters,num_eps,threshold,num_mcts_sim,npitgames,λ,e0config)
+end
+
+function policy_iter(ego, game, config=TrainingConfig())
+
+    num_iters = config.num_iters
+    num_eps = config.num_eps
+    threshold = config.threshold
     
     #Make sure game is reset
     reset!(game)
@@ -37,11 +64,11 @@ function policy_iter(ego, game)
         #Multithreaded self_play
         thread_examples = [TrainingExample[] for _ in 1:Threads.nthreads()]
         #
-        Threads.@threads for _ in 1:num_eps
+        for _ in 1:num_eps
             #Thread id
             tid = Threads.threadid()
 
-            e = execute_episode(ego, thread_games[tid])
+            e = execute_episode(ego, thread_games[tid], config.num_mcts_sim, config.e0config)
 
             append!(thread_examples[tid], e)
             reset!(thread_games[tid])
@@ -57,12 +84,14 @@ function policy_iter(ego, game)
         println("Number of training examples: $(length(examples))")
 
         old_ego = deepcopy(ego)     
-        train_nn!(ego, examples)                  
-        frac_win = pit_ego(ego, old_ego, deepcopy(game))                      # compare new net with previous net
+        train_nn!(ego, examples, λ = config.λ)                  
+
+        # compare new net with previous net
+        frac_win = pit_ego(ego, old_ego, deepcopy(game), config.npitgames)
 
         println("Fraction of wins: $(frac_win)")
 
-        if frac_win > threshold
+        if frac_win > config.threshold
             savefile = "src/saved_models/model_" * format(now(), "yyyy_mm_dd_HH_MM_SS") * ".bson"
             println("Saving current nn to $savefile")
             nn = ego.nn
@@ -130,17 +159,16 @@ function pit_ego(new_ego, old_ego, game, npitgames = 100)
     return nwins/(npitgames)
 end
 
-function execute_episode(ego, game)
+function execute_episode(ego, game, num_mcts_sim, e0config)
 
     examples = TrainingExample[]
-    n_mcts_sim = 200
     
     local outcome::Int
     while true
 
         visited = Dict{Int, MCTSVectors}()
-        for i in 1:n_mcts_sim
-            ego_search(game, ego.mm, visited)
+        for i in 1:num_mcts_sim
+            ego_search(game, ego.mm, true, visited, e0config)
         end
 
         mcts_vectors = visited[game.poskey]
@@ -185,7 +213,7 @@ function execute_episode(ego, game)
 
 end
 
-function train_nn!(ego, examples)
+function train_nn!(ego, examples; λ = 0.01)
     
     #X = zeros(Float64,6*7,length(examples))
     X = zeros(Float64,6,7,1,length(examples))
@@ -201,7 +229,6 @@ function train_nn!(ego, examples)
         Y[:,i] = vcat(examples[i].pi, Float64(examples[i].outcome))
     end
 
-    c = 0.1 # what value to use for this
     loss = function ffff(x,y)
         P_and_v = ego.nn(x)
         P = P_and_v[1:7]
@@ -209,7 +236,7 @@ function train_nn!(ego, examples)
         _pi = y[1:7]
         z = y[end]
         ppp = params(ego.nn)
-        return (z-v)^2 - dot(_pi,log.(P)) + c*dot(ppp,ppp)
+        return (z-v)^2 - dot(_pi,log.(P)) + λ*dot(ppp,ppp)
     end
 
     dataset = repeated((X, Y),1)
@@ -235,11 +262,11 @@ function index_2_move(game::Connect4, i::Int)
 end
 
 
-function search(ego::EZero, game::AbstractGame)
+function search(ego::EZero, game::AbstractGame, e0config = E0Config())
     
     visited = Dict{Int, MCTSVectors}()
     for i in 1:300
-        ego_search(game, ego.mm, visited)
+        ego_search(game, ego.mm, true, visited, e0config)
     end
 
     #
@@ -248,7 +275,7 @@ function search(ego::EZero, game::AbstractGame)
     v = mcts_vectors.v
     Q = mcts_vectors.Q 
     N = mcts_vectors.N
-    @show N
+    
     N2 = copy(N)
     best_i = findmax(N2)[2]
     move = index_2_move(game,best_i)
@@ -269,7 +296,7 @@ struct MCTSVectors
     N::Vector{Int}
 end
 
-function ego_search(game::AbstractGame, nn, visited)::Float64
+function ego_search(game::AbstractGame, nn, root_node::Bool, visited, config = E0Config())::Float64
 
     if was_last_move_a_win(game)
         return 1.0
@@ -302,6 +329,12 @@ function ego_search(game::AbstractGame, nn, visited)::Float64
     Q = mcts_vectors.Q 
     N = mcts_vectors.N
 
+    #Add dirichlet noise too root node
+    if root_node
+        η = rand(config.dirichlet)
+        P = (1-config.ϵ)*P + config.ϵ*η
+    end
+
     local u::Float64
     local best_move::getmovetype(game)
     u_best, Q_best, N_best::Float64, i_best = -Inf, 0.0, 0.0, 0
@@ -311,7 +344,7 @@ function ego_search(game::AbstractGame, nn, visited)::Float64
         i  = move.c #Hardcode connect4, must be changed for other games
 
         u = Q[i] + sqrt(2)*P[i]*sqrt(sum(N))/(1+N[i]) 
- 
+
         if u>u_best
             u_best = u
             best_move = move
@@ -322,7 +355,7 @@ function ego_search(game::AbstractGame, nn, visited)::Float64
     end
 
     make_move!(game, best_move)
-    v = ego_search(game, nn, visited)
+    v = ego_search(game, nn, false, visited, config)
     take_move!(game, best_move)
 
     visited[game.poskey].Q[i_best] = (N_best*Q_best + v)/(N_best+1)
