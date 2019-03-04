@@ -6,6 +6,7 @@ using LinearAlgebra: dot
 import Random: shuffle!
 using BSON
 using Dates: now, format
+using StatsBase: Weights, sample
 
 mutable struct EZero{M,M2} <: AbstractPlayer 
     nn::M
@@ -22,24 +23,35 @@ end
 
 function policy_iter(ego, game)
 
-    num_iters = 1000
-    num_eps = 100
+    num_iters = 10000
+    num_eps = 400
     threshold = 0.53
     
-    game = Connect4()            
+    #Make sure game is reset
+    reset!(game)
+
+    thread_games = [Connect4() for _ in 1:Threads.nthreads()]
 
     for i in 1:num_iters
         
-        examples = TrainingExample[]
-        for _ in 1:num_eps
-            e = execute_episode(ego, game)
-            append!(examples, e)
-            reset!(game)
+        #Multithreaded self_play
+        thread_examples = [TrainingExample[] for _ in 1:Threads.nthreads()]
+        #
+        Threads.@threads for _ in 1:num_eps
+            #Thread id
+            tid = Threads.threadid()
+
+            e = execute_episode(ego, thread_games[tid])
+
+            append!(thread_examples[tid], e)
+            reset!(thread_games[tid])
         end 
+
+        #Flatten TrainingExamples
+        examples = [x for examples in thread_examples for x in examples]
 
         #Symmetrize input if possible (In Connect4 it is possible)
         symmetry_examples = symmetrize_example.(examples)
-
         append!(examples, symmetry_examples)
 
         println("Number of training examples: $(length(examples))")
@@ -89,8 +101,8 @@ function symmetrize_example(ex::TrainingExample)
     return newex
 end
 
-function pit_ego(new_ego, old_ego, game)
-    npitgames = 100
+function pit_ego(new_ego, old_ego, game, npitgames = 100)
+    #npitgames = 100
     nwins = 0
 
     for i in 1:(npitgames/2)
@@ -121,8 +133,9 @@ end
 function execute_episode(ego, game)
 
     examples = TrainingExample[]
-    n_mcts_sim = 100
+    n_mcts_sim = 200
     
+    local outcome::Int
     while true
 
         visited = Dict{Int, MCTSVectors}()
@@ -130,39 +143,46 @@ function execute_episode(ego, game)
             ego_search(game, ego.mm, visited)
         end
 
-        P,v,Q,N = visited[game.poskey]
+        mcts_vectors = visited[game.poskey]
+        P = mcts_vectors.P
+        v = mcts_vectors.v
+        Q = mcts_vectors.Q 
+        N = mcts_vectors.N
         pi = N./sum(N)
 
+        probabilities = Weights(pi)
+
         N2 = copy(N)
-        best_i = findmax(N2)[2]
+        best_i = sample(1:7,probabilities)#findmax(N2)[2]
         move = index_2_move(game,best_i)
         while !is_move_legal(game, move)
-            N2[best_i] = -Inf
-            best_i = findmax(N2)[2]
+            probabilities[best_i] = 0.0
+            best_i = sample(1:7,probabilities)
             move = index_2_move(game,best_i)
         end
 
         #move = random.choice(len(mcts.pi(s)), p=mcts.pi(s))
+        push!(examples, TrainingExample(board_representation(game), P, pi, v,-100))
+
         make_move!(game,move)
-        outcome = 0.0
+        
         if is_draw(game)
             outcome = 0.0
-        elseif _is_player_winning(game, game.current_player == PLAYER1 ? PLAYER2 : PLAYER1 )
+            break
+        elseif was_last_move_a_win(game)
             outcome = 1.0
-        else
-            push!(examples, TrainingExample(board_representation(game), P, pi, v,-100))
-            continue
+            break
         end
-
-        #update training examples with outcome
-        for e in reverse(examples)
-            e.outcome = outcome
-            outcome *= -1
-        end
-
-        return examples
-
     end
+
+    #update training examples with outcome
+    for e in reverse(examples)
+        e.outcome = outcome
+        outcome *= -1
+    end
+
+    return examples
+
 end
 
 function train_nn!(ego, examples)
@@ -189,7 +209,7 @@ function train_nn!(ego, examples)
         _pi = y[1:7]
         z = y[end]
         ppp = params(ego.nn)
-        return (v-z)^2 - dot(_pi,log.(P)) + c*dot(ppp,ppp)
+        return (z-v)^2 - dot(_pi,log.(P)) + c*dot(ppp,ppp)
     end
 
     dataset = repeated((X, Y),1)
@@ -218,7 +238,7 @@ end
 function search(ego::EZero, game::AbstractGame)
     
     visited = Dict{Int, MCTSVectors}()
-    for i in 1:100
+    for i in 1:300
         ego_search(game, ego.mm, visited)
     end
 
@@ -228,7 +248,7 @@ function search(ego::EZero, game::AbstractGame)
     v = mcts_vectors.v
     Q = mcts_vectors.Q 
     N = mcts_vectors.N
-    
+    @show N
     N2 = copy(N)
     best_i = findmax(N2)[2]
     move = index_2_move(game,best_i)
