@@ -17,11 +17,12 @@ end
 struct E0Config
     α::Float64
     ϵ::Float64
+    num_moves_temp::Int
     dirichlet::Dirichlet{Float64}
 end
 
-function E0Config(;α = 0.8, ϵ = 0.25, n = 7)
-    return E0Config(α,ϵ, Dirichlet(ones(n)*α))
+function E0Config(;α = 0.8, ϵ = 0.25, n = 7, num_moves_temp = 15)
+    return E0Config(α,ϵ, num_moves_temp, Dirichlet(ones(n)*α))
 end
 
 mutable struct TrainingExample
@@ -43,7 +44,7 @@ struct TrainingConfig
 end
 
 function TrainingConfig(;num_iters=1000, num_eps=400, threshold=0.53, 
-    num_mcts_sim=300, npitgames=100, λ=0.01,
+    num_mcts_sim=300, npitgames=100, λ=0.01, 
     e0config = E0Config() )
     return TrainingConfig(num_iters,num_eps,threshold,num_mcts_sim,npitgames,λ,e0config)
 end
@@ -64,7 +65,7 @@ function policy_iter(ego, game, config=TrainingConfig())
         #Multithreaded self_play
         thread_examples = [TrainingExample[] for _ in 1:Threads.nthreads()]
         #
-        for _ in 1:num_eps
+        Threads.@threads for _ in 1:num_eps
             #Thread id
             tid = Threads.threadid()
 
@@ -76,6 +77,13 @@ function policy_iter(ego, game, config=TrainingConfig())
 
         #Flatten TrainingExamples
         examples = [x for examples in thread_examples for x in examples]
+
+        #=for e in examples
+            println(reshape(e.input,6,7))
+            println("pi: $(e.pi)")
+            println("P: $(e.P)")
+        end
+        error("Stop")=#
 
         #Symmetrize input if possible (In Connect4 it is possible)
         symmetry_examples = symmetrize_example.(examples)
@@ -164,6 +172,7 @@ function execute_episode(ego, game, num_mcts_sim, e0config)
     examples = TrainingExample[]
     
     local outcome::Int
+    nply = 0
     while true
 
         visited = Dict{Int, MCTSVectors}()
@@ -176,10 +185,12 @@ function execute_episode(ego, game, num_mcts_sim, e0config)
         v = mcts_vectors.v
         Q = mcts_vectors.Q 
         N = mcts_vectors.N
+
         pi = N./sum(N)
 
         probabilities = Weights(pi)
 
+        #Choose move pased on probabilities
         N2 = copy(N)
         best_i = sample(1:7,probabilities)#findmax(N2)[2]
         move = index_2_move(game,best_i)
@@ -187,6 +198,12 @@ function execute_episode(ego, game, num_mcts_sim, e0config)
             probabilities[best_i] = 0.0
             best_i = sample(1:7,probabilities)
             move = index_2_move(game,best_i)
+        end
+
+        #
+        if nply > e0config.num_moves_temp
+            fill!(pi,0.0)
+            pi[best_i] = 1.0
         end
 
         #move = random.choice(len(mcts.pi(s)), p=mcts.pi(s))
@@ -201,6 +218,8 @@ function execute_episode(ego, game, num_mcts_sim, e0config)
             outcome = 1.0
             break
         end
+
+        nply += 1
     end
 
     #update training examples with outcome
@@ -215,8 +234,13 @@ end
 
 function train_nn!(ego, examples; λ = 0.01)
     
-    #X = zeros(Float64,6*7,length(examples))
-    X = zeros(Float64,6,7,1,length(examples))
+    X = zeros(Float64,6*7,length(examples))
+    Y = zeros(Float64,7+1,length(examples))
+    for i in 1:length(examples)
+        X[:,i] = examples[i].input        
+        Y[:,i] = vcat(examples[i].pi, Float64(examples[i].outcome))
+    end
+    #=X = zeros(Float64,6,7,1,length(examples))
     Y = zeros(Float64,7+1,length(examples))
     for i in 1:length(examples)
         counter = 1
@@ -227,7 +251,7 @@ function train_nn!(ego, examples; λ = 0.01)
             end
         end
         Y[:,i] = vcat(examples[i].pi, Float64(examples[i].outcome))
-    end
+    end=#
 
     loss = function ffff(x,y)
         P_and_v = ego.nn(x)
@@ -309,7 +333,8 @@ function ego_search(game::AbstractGame, nn, root_node::Bool, visited, config = E
     if !haskey(visited, game.poskey)
 
             boardrep = board_representation(game)
-            P_and_v = nn(reshape(boardrep,(6,7,1,1)))
+            #boardrep = reshape(boardrep,(6,7,1,1))
+            P_and_v = nn(boardrep)
 
             P = P_and_v[1:7] #hardcode connect4
             v = P_and_v[end]
